@@ -9,10 +9,10 @@ class RewardsService {
   Future<List<RewardModel>> getAllRewards() async {
     try {
       final response = await _supabase
-          .from('rewards')
+          .from('reward')
           .select()
-          .eq('is_active', true)
-          .order('points_required', ascending: true);
+          .gt('stok', 0)
+          .order('poin_dibutuhkan', ascending: true);
 
       return response.map<RewardModel>((data) => RewardModel.fromJson(data)).toList();
     } catch (e) {
@@ -24,12 +24,12 @@ class RewardsService {
     try {
       final response = await _supabase
           .from('redemptions')
-          .select('*, rewards(*)')
+          .select('*, reward(*)')
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
       return response
-          .map<RewardModel>((data) => RewardModel.fromJson(data['rewards']))
+          .map<RewardModel>((data) => RewardModel.fromJson(data['reward']))
           .toList();
     } catch (e) {
       throw Exception('Get user redeemed rewards failed: $e');
@@ -41,19 +41,19 @@ class RewardsService {
       // Get user and reward data
       final user = await _supabase
           .from('users')
-          .select('points_balance')
-          .eq('id', userId)
+          .select('saldo_poin')
+          .eq('user_id', userId)
           .single();
 
       final reward = await _supabase
-          .from('rewards')
+          .from('reward')
           .select()
-          .eq('id', rewardId)
+          .eq('reward_id', rewardId)
           .single();
 
-      final userPoints = user['points_balance'];
-      final requiredPoints = reward['points_required'];
-      final stock = reward['stock'];
+      final userPoints = user['saldo_poin'];
+      final requiredPoints = reward['poin_dibutuhkan'];
+      final stock = reward['stok'];
 
       // Validation
       if (userPoints < requiredPoints) {
@@ -64,21 +64,33 @@ class RewardsService {
         throw Exception('Reward out of stock');
       }
 
-      // Check if reward is still valid
-      final now = DateTime.now();
-      final validFrom = DateTime.parse(reward['valid_from']);
-      final validUntil = DateTime.parse(reward['valid_until']);
+      // Create redemption record
+      final redemptionId = _uuid.v4();
+      final redemptionCode = _generateRedemptionCode();
 
-      if (now.isBefore(validFrom) || now.isAfter(validUntil)) {
-        throw Exception('Reward not valid');
-      }
-
-      // Process redemption atomically
-      await _supabase.rpc('process_reward_redemption', params: {
-        'user_id_param': userId,
-        'reward_id_param': rewardId,
-        'points_required_param': requiredPoints,
+      await _supabase.from('redemptions').insert({
+        'redemption_id': redemptionId,
+        'user_id': userId,
+        'reward_id': rewardId,
+        'kode_penukaran': redemptionCode,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
       });
+
+      // Update user points
+      await _supabase
+          .from('users')
+          .update({
+            'saldo_poin': userPoints - requiredPoints,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId);
+
+      // Update reward stock
+      await _supabase
+          .from('reward')
+          .update({'stok': stock - 1})
+          .eq('reward_id', rewardId);
 
       return true;
     } catch (e) {
@@ -89,11 +101,11 @@ class RewardsService {
   Future<List<RewardModel>> getRewardsByCategory(String category) async {
     try {
       final response = await _supabase
-          .from('rewards')
+          .from('reward')
           .select()
-          .eq('category', category)
-          .eq('is_active', true)
-          .order('points_required', ascending: true);
+          .eq('tipe', category)
+          .gt('stok', 0)
+          .order('poin_dibutuhkan', ascending: true);
 
       return response.map<RewardModel>((data) => RewardModel.fromJson(data)).toList();
     } catch (e) {
@@ -104,9 +116,9 @@ class RewardsService {
   Future<RewardModel?> getRewardById(String rewardId) async {
     try {
       final response = await _supabase
-          .from('rewards')
+          .from('reward')
           .select()
-          .eq('id', rewardId)
+          .eq('reward_id', rewardId)
           .single();
 
       return RewardModel.fromJson(response);
@@ -119,7 +131,7 @@ class RewardsService {
     try {
       final response = await _supabase
           .from('redemptions')
-          .select('*, rewards(name, points_required)')
+          .select('*, reward(nama, poin_dibutuhkan)')
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
@@ -127,11 +139,17 @@ class RewardsService {
         'redemptions': response,
         'total_points_spent': response.fold<int>(
           0, 
-          (sum, redemption) => sum + (redemption['rewards']['points_required'] as int)
+          (sum, redemption) => sum + (redemption['reward']['poin_dibutuhkan'] as int)
         ),
       };
     } catch (e) {
       throw Exception('Get redemption history failed: $e');
     }
+  }
+
+  String _generateRedemptionCode() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final random = _uuid.v4().substring(0, 8).toUpperCase();
+    return 'RDM$random';
   }
 }

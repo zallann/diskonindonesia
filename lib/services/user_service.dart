@@ -22,7 +22,7 @@ class UserService {
       final response = await _supabase
           .from('users')
           .select()
-          .eq('id', userId)
+          .eq('user_id', userId)
           .single();
 
       return UserModel.fromJson(response);
@@ -33,10 +33,21 @@ class UserService {
 
   Future<bool> updateUserPoints(String userId, int pointsToAdd) async {
     try {
-      await _supabase.rpc('update_user_points', params: {
-        'user_id': userId,
-        'points_to_add': pointsToAdd,
-      });
+      final user = await _supabase
+          .from('users')
+          .select('saldo_poin')
+          .eq('user_id', userId)
+          .single();
+
+      final currentPoints = user['saldo_poin'] ?? 0;
+
+      await _supabase
+          .from('users')
+          .update({
+            'saldo_poin': currentPoints + pointsToAdd,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId);
 
       return true;
     } catch (e) {
@@ -46,10 +57,21 @@ class UserService {
 
   Future<bool> updateUserWallet(String userId, double amountToAdd) async {
     try {
-      await _supabase.rpc('update_user_wallet', params: {
-        'user_id': userId,
-        'amount_to_add': amountToAdd,
-      });
+      final user = await _supabase
+          .from('users')
+          .select('saldo_dompet')
+          .eq('user_id', userId)
+          .single();
+
+      final currentWallet = (user['saldo_dompet'] ?? 0.0).toDouble();
+
+      await _supabase
+          .from('users')
+          .update({
+            'saldo_dompet': currentWallet + amountToAdd,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId);
 
       return true;
     } catch (e) {
@@ -62,7 +84,7 @@ class UserService {
       final response = await _supabase
           .from('users')
           .select()
-          .or('full_name.ilike.%$query%,email.ilike.%$query%')
+          .or('nama.ilike.%$query%,email.ilike.%$query%')
           .order('created_at', ascending: false);
 
       return response.map<UserModel>((data) => UserModel.fromJson(data)).toList();
@@ -73,10 +95,49 @@ class UserService {
 
   Future<Map<String, dynamic>> getUserStats(String userId) async {
     try {
-      final response = await _supabase
-          .rpc('get_user_stats', params: {'user_id': userId});
+      // Get user basic info
+      final user = await _supabase
+          .from('users')
+          .select()
+          .eq('user_id', userId)
+          .single();
 
-      return response;
+      // Get transaction stats
+      final transactions = await _supabase
+          .from('transactions')
+          .select()
+          .eq('user_id', userId);
+
+      // Get redemption stats
+      final redemptions = await _supabase
+          .from('redemptions')
+          .select('*, reward(poin_dibutuhkan)')
+          .eq('user_id', userId);
+
+      double totalSpent = 0;
+      double totalCashback = 0;
+      int totalPointsEarned = 0;
+
+      for (final transaction in transactions) {
+        totalSpent += (transaction['jumlah'] ?? 0.0).toDouble();
+        totalCashback += (transaction['jumlah_cashback'] ?? 0.0).toDouble();
+        totalPointsEarned += transaction['poin_diperoleh'] ?? 0;
+      }
+
+      int totalPointsRedeemed = 0;
+      for (final redemption in redemptions) {
+        totalPointsRedeemed += redemption['reward']['poin_dibutuhkan'] ?? 0;
+      }
+
+      return {
+        'user': UserModel.fromJson(user),
+        'total_transactions': transactions.length,
+        'total_spent': totalSpent,
+        'total_cashback': totalCashback,
+        'total_points_earned': totalPointsEarned,
+        'total_points_redeemed': totalPointsRedeemed,
+        'total_redemptions': redemptions.length,
+      };
     } catch (e) {
       throw Exception('Get user stats failed: $e');
     }

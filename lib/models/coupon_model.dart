@@ -1,92 +1,71 @@
 class CouponModel {
-  final String id;
-  final String merchantId;
-  final String code;
-  final String title;
-  final String description;
-  final String imageUrl;
-  final CouponType type;
-  final double discountValue;
-  final double? minimumPurchase;
-  final double? maximumDiscount;
-  final int usageLimit;
-  final int usedCount;
-  final DateTime validFrom;
-  final DateTime validUntil;
-  final bool isActive;
-  final List<String>? applicableCategories;
-  final Map<String, dynamic>? metadata;
+  final String couponId;
+  final String? tenantId;
+  final String kode;
+  final CouponType tipeDiskon;
+  final double nilaiDiskon;
+  final double minBelanja;
+  final DateTime tanggalKadaluwarsa;
   final DateTime createdAt;
 
   CouponModel({
-    required this.id,
-    required this.merchantId,
-    required this.code,
-    required this.title,
-    required this.description,
-    required this.imageUrl,
-    required this.type,
-    required this.discountValue,
-    this.minimumPurchase,
-    this.maximumDiscount,
-    required this.usageLimit,
-    required this.usedCount,
-    required this.validFrom,
-    required this.validUntil,
-    required this.isActive,
-    this.applicableCategories,
-    this.metadata,
+    required this.couponId,
+    this.tenantId,
+    required this.kode,
+    required this.tipeDiskon,
+    required this.nilaiDiskon,
+    required this.minBelanja,
+    required this.tanggalKadaluwarsa,
     required this.createdAt,
   });
 
   factory CouponModel.fromJson(Map<String, dynamic> json) {
     return CouponModel(
-      id: json['id'],
-      merchantId: json['merchant_id'],
-      code: json['code'],
-      title: json['title'],
-      description: json['description'],
-      imageUrl: json['image_url'],
-      type: CouponType.values.firstWhere(
-        (e) => e.toString().split('.').last == json['type'],
-        orElse: () => CouponType.percentage,
+      couponId: json['coupon_id'],
+      tenantId: json['tenant_id'],
+      kode: json['kode'],
+      tipeDiskon: CouponType.values.firstWhere(
+        (e) => e.toString().split('.').last == json['tipe_diskon'],
+        orElse: () => CouponType.persentase,
       ),
-      discountValue: (json['discount_value'] ?? 0.0).toDouble(),
-      minimumPurchase: json['minimum_purchase']?.toDouble(),
-      maximumDiscount: json['maximum_discount']?.toDouble(),
-      usageLimit: json['usage_limit'] ?? 0,
-      usedCount: json['used_count'] ?? 0,
-      validFrom: DateTime.parse(json['valid_from']),
-      validUntil: DateTime.parse(json['valid_until']),
-      isActive: json['is_active'] ?? true,
-      applicableCategories: json['applicable_categories']?.cast<String>(),
-      metadata: json['metadata'],
+      nilaiDiskon: (json['nilai_diskon'] ?? 0.0).toDouble(),
+      minBelanja: (json['min_belanja'] ?? 0.0).toDouble(),
+      tanggalKadaluwarsa: DateTime.parse(json['tanggal_kadaluwarsa']),
       createdAt: DateTime.parse(json['created_at']),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'merchant_id': merchantId,
-      'code': code,
-      'title': title,
-      'description': description,
-      'image_url': imageUrl,
-      'type': type.toString().split('.').last,
-      'discount_value': discountValue,
-      'minimum_purchase': minimumPurchase,
-      'maximum_discount': maximumDiscount,
-      'usage_limit': usageLimit,
-      'used_count': usedCount,
-      'valid_from': validFrom.toIso8601String(),
-      'valid_until': validUntil.toIso8601String(),
-      'is_active': isActive,
-      'applicable_categories': applicableCategories,
-      'metadata': metadata,
+      'coupon_id': couponId,
+      'tenant_id': tenantId,
+      'kode': kode,
+      'tipe_diskon': tipeDiskon.toString().split('.').last,
+      'nilai_diskon': nilaiDiskon,
+      'min_belanja': minBelanja,
+      'tanggal_kadaluwarsa': tanggalKadaluwarsa.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
     };
   }
+
+  // Getter untuk kompatibilitas dengan kode yang sudah ada
+  String get id => couponId;
+  String get merchantId => tenantId ?? '';
+  String get code => kode;
+  String get title => 'Kupon Diskon';
+  String get description => 'Diskon ${tipeDiskon == CouponType.persentase ? '${nilaiDiskon.toInt()}%' : 'Rp ${nilaiDiskon.toInt()}'}';
+  String get imageUrl => '';
+  CouponTypeOld get type => tipeDiskon == CouponType.persentase ? CouponTypeOld.percentage : CouponTypeOld.fixed;
+  double get discountValue => nilaiDiskon;
+  double? get minimumPurchase => minBelanja;
+  double? get maximumDiscount => null;
+  int get usageLimit => 1;
+  int get usedCount => 0;
+  DateTime get validFrom => createdAt;
+  DateTime get validUntil => tanggalKadaluwarsa;
+  bool get isActive => DateTime.now().isBefore(tanggalKadaluwarsa);
+  List<String>? get applicableCategories => null;
+  Map<String, dynamic>? get metadata => null;
 
   bool get isValid => isActive && 
     usedCount < usageLimit && 
@@ -94,23 +73,20 @@ class CouponModel {
     DateTime.now().isBefore(validUntil);
 
   double calculateDiscount(double purchaseAmount) {
-    if (!isValid || (minimumPurchase != null && purchaseAmount < minimumPurchase!)) {
+    if (!isValid || purchaseAmount < minBelanja) {
       return 0.0;
     }
 
     double discount;
-    if (type == CouponType.percentage) {
-      discount = purchaseAmount * (discountValue / 100);
+    if (tipeDiskon == CouponType.persentase) {
+      discount = purchaseAmount * (nilaiDiskon / 100);
     } else {
-      discount = discountValue;
-    }
-
-    if (maximumDiscount != null && discount > maximumDiscount!) {
-      discount = maximumDiscount!;
+      discount = nilaiDiskon;
     }
 
     return discount;
   }
 }
 
-enum CouponType { percentage, fixed }
+enum CouponType { persentase, tetap }
+enum CouponTypeOld { percentage, fixed }

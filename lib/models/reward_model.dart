@@ -1,76 +1,83 @@
 class RewardModel {
-  final String id;
-  final String merchantId;
-  final String name;
-  final String description;
-  final String imageUrl;
-  final int pointsRequired;
-  final int stock;
-  final RewardCategory category;
-  final DateTime validFrom;
-  final DateTime validUntil;
-  final bool isActive;
-  final Map<String, dynamic>? metadata;
+  final String rewardId;
+  final String nama;
+  final String? deskripsi;
+  final int poinDibutuhkan;
+  final RewardType tipe;
+  final int stok;
   final DateTime createdAt;
 
   RewardModel({
-    required this.id,
-    required this.merchantId,
-    required this.name,
-    required this.description,
-    required this.imageUrl,
-    required this.pointsRequired,
-    required this.stock,
-    required this.category,
-    required this.validFrom,
-    required this.validUntil,
-    required this.isActive,
-    this.metadata,
+    required this.rewardId,
+    required this.nama,
+    this.deskripsi,
+    required this.poinDibutuhkan,
+    required this.tipe,
+    required this.stok,
     required this.createdAt,
   });
 
   factory RewardModel.fromJson(Map<String, dynamic> json) {
     return RewardModel(
-      id: json['id'],
-      merchantId: json['merchant_id'],
-      name: json['name'],
-      description: json['description'],
-      imageUrl: json['image_url'],
-      pointsRequired: json['points_required'] ?? 0,
-      stock: json['stock'] ?? 0,
-      category: RewardCategory.values.firstWhere(
-        (e) => e.toString().split('.').last == json['category'],
-        orElse: () => RewardCategory.voucher,
+      rewardId: json['reward_id'],
+      nama: json['nama'],
+      deskripsi: json['deskripsi'],
+      poinDibutuhkan: json['poin_dibutuhkan'] ?? 0,
+      tipe: RewardType.values.firstWhere(
+        (e) => e.toString().split('.').last == json['tipe'],
+        orElse: () => RewardType.voucher,
       ),
-      validFrom: DateTime.parse(json['valid_from']),
-      validUntil: DateTime.parse(json['valid_until']),
-      isActive: json['is_active'] ?? true,
-      metadata: json['metadata'],
+      stok: json['stok'] ?? 0,
       createdAt: DateTime.parse(json['created_at']),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'merchant_id': merchantId,
-      'name': name,
-      'description': description,
-      'image_url': imageUrl,
-      'points_required': pointsRequired,
-      'stock': stock,
-      'category': category.toString().split('.').last,
-      'valid_from': validFrom.toIso8601String(),
-      'valid_until': validUntil.toIso8601String(),
-      'is_active': isActive,
-      'metadata': metadata,
+      'reward_id': rewardId,
+      'nama': nama,
+      'deskripsi': deskripsi,
+      'poin_dibutuhkan': poinDibutuhkan,
+      'tipe': tipe.toString().split('.').last,
+      'stok': stok,
       'created_at': createdAt.toIso8601String(),
     };
   }
 
+  // Getter untuk kompatibilitas dengan kode yang sudah ada
+  String get id => rewardId;
+  String get merchantId => ''; // Tidak ada di database
+  String get name => nama;
+  String get description => deskripsi ?? '';
+  String get imageUrl => ''; // Tidak ada di database
+  int get pointsRequired => poinDibutuhkan;
+  int get stock => stok;
+  RewardCategory get category => _mapTypeToCategory(tipe);
+  DateTime get validFrom => createdAt;
+  DateTime get validUntil => createdAt.add(const Duration(days: 365)); // Default 1 tahun
+  bool get isActive => true; // Default true
+  Map<String, dynamic>? get metadata => null; // Tidak ada di database
+
   bool get isAvailable => isActive && stock > 0 && 
     DateTime.now().isAfter(validFrom) && 
     DateTime.now().isBefore(validUntil);
+
+  RewardCategory _mapTypeToCategory(RewardType type) {
+    switch (type) {
+      case RewardType.voucher:
+        return RewardCategory.voucher;
+      case RewardType.barang:
+        return RewardCategory.product;
+      case RewardType.kredit:
+        return RewardCategory.cashback;
+    }
+  }
+}
+
+enum RewardType { 
+  voucher, 
+  barang, 
+  kredit 
 }
 
 enum RewardCategory { 
