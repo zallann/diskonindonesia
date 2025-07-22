@@ -77,7 +77,7 @@ class _RewardsScreenState extends State<RewardsScreen>
         }
 
         final rewards = rewardsProvider.availableRewards;
-        final userPoints = authProvider.currentUser?.pointsBalance ?? 0;
+        final userPoints = authProvider.currentUser?.saldoPoin ?? 0;
 
         return RefreshIndicator(
           onRefresh: _loadRewards,
@@ -240,7 +240,7 @@ class _RewardsScreenState extends State<RewardsScreen>
   }
 
   Widget _buildRewardCard(RewardModel reward, int userPoints) {
-    final canRedeem = userPoints >= reward.pointsRequired && reward.isAvailable;
+    final canRedeem = userPoints >= reward.poinDibutuhkan && reward.isAvailable;
 
     return GestureDetector(
       onTap: () => _showRewardDetails(reward, canRedeem),
@@ -287,7 +287,7 @@ class _RewardsScreenState extends State<RewardsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      reward.name,
+                      reward.nama,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -298,7 +298,7 @@ class _RewardsScreenState extends State<RewardsScreen>
                     const SizedBox(height: 4),
                     
                     Text(
-                      reward.description,
+                      reward.deskripsi ?? '',
                       style: const TextStyle(
                         color: AppTheme.neutralGray600,
                         fontSize: 12,
@@ -319,7 +319,7 @@ class _RewardsScreenState extends State<RewardsScreen>
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          NumberFormat('#,###').format(reward.pointsRequired),
+                          NumberFormat('#,###').format(reward.poinDibutuhkan),
                           style: TextStyle(
                             color: canRedeem ? AppTheme.primaryRed : AppTheme.neutralGray500,
                             fontWeight: FontWeight.bold,
@@ -339,22 +339,22 @@ class _RewardsScreenState extends State<RewardsScreen>
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: reward.stock > 0 
+                            color: reward.stok > 0 
                                 ? AppTheme.successGreen.withOpacity(0.1) 
                                 : AppTheme.errorRed.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            'Stok: ${reward.stock}',
+                            'Stok: ${reward.stok}',
                             style: TextStyle(
-                              color: reward.stock > 0 ? AppTheme.successGreen : AppTheme.errorRed,
+                              color: reward.stok > 0 ? AppTheme.successGreen : AppTheme.errorRed,
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                         const Spacer(),
-                        if (!canRedeem && userPoints < reward.pointsRequired)
+                        if (!canRedeem && userPoints < reward.poinDibutuhkan)
                           const Icon(
                             Icons.lock,
                             color: AppTheme.neutralGray400,
@@ -415,7 +415,7 @@ class _RewardsScreenState extends State<RewardsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    reward.name,
+                    reward.nama,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -430,7 +430,7 @@ class _RewardsScreenState extends State<RewardsScreen>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${NumberFormat('#,###').format(reward.pointsRequired)} poin',
+                        '${NumberFormat('#,###').format(reward.poinDibutuhkan)} poin',
                         style: const TextStyle(
                           color: AppTheme.neutralGray600,
                           fontSize: 14,
@@ -633,7 +633,7 @@ class _RewardsScreenState extends State<RewardsScreen>
                         children: [
                           Expanded(
                             child: Text(
-                              reward.name,
+                              reward.nama,
                               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -655,7 +655,7 @@ class _RewardsScreenState extends State<RewardsScreen>
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  NumberFormat('#,###').format(reward.pointsRequired),
+                                  NumberFormat('#,###').format(reward.poinDibutuhkan),
                                   style: const TextStyle(
                                     color: AppTheme.accentGold,
                                     fontWeight: FontWeight.bold,
@@ -672,7 +672,7 @@ class _RewardsScreenState extends State<RewardsScreen>
 
                       // Description
                       Text(
-                        reward.description,
+                        reward.deskripsi ?? '',
                         style: const TextStyle(
                           color: AppTheme.neutralGray600,
                           fontSize: 16,
@@ -684,7 +684,7 @@ class _RewardsScreenState extends State<RewardsScreen>
 
                       // Details
                       _buildDetailRow('Kategori', _getCategoryName(reward.category)),
-                      _buildDetailRow('Stok Tersisa', '${reward.stock} item'),
+                      _buildDetailRow('Stok Tersisa', '${reward.stok} item'),
                       _buildDetailRow(
                         'Berlaku Hingga', 
                         DateFormat('dd MMM yyyy').format(reward.validUntil),
@@ -737,7 +737,7 @@ class _RewardsScreenState extends State<RewardsScreen>
       builder: (context) => AlertDialog(
         title: const Text('Konfirmasi Penukaran'),
         content: Text(
-          'Apakah Anda yakin ingin menukar ${NumberFormat('#,###').format(reward.pointsRequired)} poin untuk ${reward.name}?',
+          'Apakah Anda yakin ingin menukar ${NumberFormat('#,###').format(reward.poinDibutuhkan)} poin untuk ${reward.nama}?',
         ),
         actions: [
           TextButton(
@@ -756,7 +756,7 @@ class _RewardsScreenState extends State<RewardsScreen>
 
     final success = await rewardsProvider.redeemReward(
       authProvider.currentUser!.id,
-      reward.id,
+      reward.rewardId,
     );
 
     if (mounted) {

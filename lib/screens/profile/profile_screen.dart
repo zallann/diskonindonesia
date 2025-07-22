@@ -39,7 +39,7 @@ class ProfileScreen extends StatelessWidget {
                                 : null,
                             child: user.profileImageUrl == null
                                 ? Text(
-                                    user.fullName?.substring(0, 1).toUpperCase() ?? 'U',
+                                    user.nama?.substring(0, 1).toUpperCase() ?? 'U',
                                     style: const TextStyle(
                                       color: AppTheme.primaryRed,
                                       fontSize: 32,
@@ -50,7 +50,7 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            user.fullName ?? 'Pengguna',
+                            user.nama ?? 'Pengguna',
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -95,7 +95,7 @@ class ProfileScreen extends StatelessWidget {
                             child: _buildStatCard(
                               context,
                               'Check-in Streak',
-                              '${user.checkInStreak}',
+                              '0', // Default since not tracked in DB
                               Icons.local_fire_department,
                               AppTheme.warningOrange,
                             ),
@@ -381,6 +381,10 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _showReferralModal(BuildContext context, String referralCode) {
+    if (referralCode.isEmpty) {
+      referralCode = 'REF123456'; // Default referral code
+    }
+    
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,

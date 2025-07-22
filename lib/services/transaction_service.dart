@@ -42,26 +42,22 @@ class TransactionService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      double discountAmount = 0.0;
-      
-      // Apply coupon if provided
-      if (couponId != null) {
-        discountAmount = await _applyCoupon(couponId, amount);
-      }
-
       final transactionId = _uuid.v4();
       
+      // Calculate points (1 point per 1000 rupiah)
+      final points = (amount / 1000).floor();
+      
+      // Calculate cashback (5% of amount)
+      final cashback = amount * 0.05;
+      
       await _supabase.from('transactions').insert({
-        'id': transactionId,
+        'transaction_id': transactionId,
         'user_id': userId,
-        'merchant_id': merchantId,
-        'amount': amount,
-        'discount_amount': discountAmount,
-        'coupon_id': couponId,
+        'tenant_id': merchantId,
+        'jumlah': amount,
+        'poin_diperoleh': points,
+        'jumlah_cashback': cashback,
         'status': 'pending',
-        'type': 'purchase',
-        'description': description,
-        'metadata': metadata,
         'created_at': DateTime.now().toIso8601String(),
       });
 
@@ -73,13 +69,25 @@ class TransactionService {
 
   Future<bool> verifyTransaction(String transactionId) async {
     try {
+      // Get transaction details
+      final transaction = await _supabase
+          .from('transactions')
+          .select()
+          .eq('transaction_id', transactionId)
+          .single();
+
+      // Update transaction status
       await _supabase
           .from('transactions')
-          .update({
-            'status': 'verified',
-            'verified_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', transactionId);
+          .update({'status': 'terverifikasi'})
+          .eq('transaction_id', transactionId);
+
+      // Update user points and wallet
+      final userId = transaction['user_id'];
+      final points = transaction['poin_diperoleh'] ?? 0;
+      final cashback = transaction['jumlah_cashback'] ?? 0.0;
+
+      await _updateUserBalance(userId, points, cashback);
 
       return true;
     } catch (e) {
@@ -93,24 +101,21 @@ class TransactionService {
       final transaction = await _supabase
           .from('transactions')
           .select()
-          .eq('id', transactionId)
+          .eq('transaction_id', transactionId)
           .single();
 
-      final amount = transaction['amount'];
+      final amount = transaction['jumlah'];
       final userId = transaction['user_id'];
       final cashbackAmount = amount * cashbackRate;
 
       // Update transaction with cashback
       await _supabase
           .from('transactions')
-          .update({'cashback_amount': cashbackAmount})
-          .eq('id', transactionId);
+          .update({'jumlah_cashback': cashbackAmount})
+          .eq('transaction_id', transactionId);
 
       // Add cashback to user wallet
-      await _supabase.rpc('update_user_wallet', params: {
-        'user_id': userId,
-        'amount_to_add': cashbackAmount,
-      });
+      await _updateUserWallet(userId, cashbackAmount);
 
       return true;
     } catch (e) {
@@ -118,56 +123,49 @@ class TransactionService {
     }
   }
 
-  Future<double> _applyCoupon(String couponId, double amount) async {
+  Future<void> _updateUserBalance(String userId, int points, double cashback) async {
     try {
-      final coupon = await _supabase
-          .from('coupons')
-          .select()
-          .eq('id', couponId)
+      final user = await _supabase
+          .from('users')
+          .select('saldo_poin, saldo_dompet')
+          .eq('user_id', userId)
           .single();
 
-      // Validate coupon
-      final now = DateTime.now();
-      final validFrom = DateTime.parse(coupon['valid_from']);
-      final validUntil = DateTime.parse(coupon['valid_until']);
-      final isActive = coupon['is_active'];
-      final usageLimit = coupon['usage_limit'];
-      final usedCount = coupon['used_count'];
-      final minimumPurchase = coupon['minimum_purchase']?.toDouble();
+      final currentPoints = user['saldo_poin'] ?? 0;
+      final currentWallet = (user['saldo_dompet'] ?? 0.0).toDouble();
 
-      if (!isActive || 
-          now.isBefore(validFrom) || 
-          now.isAfter(validUntil) ||
-          usedCount >= usageLimit ||
-          (minimumPurchase != null && amount < minimumPurchase)) {
-        return 0.0;
-      }
-
-      // Calculate discount
-      final type = coupon['type'];
-      final discountValue = coupon['discount_value'].toDouble();
-      final maximumDiscount = coupon['maximum_discount']?.toDouble();
-
-      double discount;
-      if (type == 'percentage') {
-        discount = amount * (discountValue / 100);
-      } else {
-        discount = discountValue;
-      }
-
-      if (maximumDiscount != null && discount > maximumDiscount) {
-        discount = maximumDiscount;
-      }
-
-      // Update coupon usage
       await _supabase
-          .from('coupons')
-          .update({'used_count': usedCount + 1})
-          .eq('id', couponId);
-
-      return discount;
+          .from('users')
+          .update({
+            'saldo_poin': currentPoints + points,
+            'saldo_dompet': currentWallet + cashback,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId);
     } catch (e) {
-      throw Exception('Apply coupon failed: $e');
+      throw Exception('Update user balance failed: $e');
+    }
+  }
+
+  Future<void> _updateUserWallet(String userId, double amount) async {
+    try {
+      final user = await _supabase
+          .from('users')
+          .select('saldo_dompet')
+          .eq('user_id', userId)
+          .single();
+
+      final currentWallet = (user['saldo_dompet'] ?? 0.0).toDouble();
+
+      await _supabase
+          .from('users')
+          .update({
+            'saldo_dompet': currentWallet + amount,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId);
+    } catch (e) {
+      throw Exception('Update user wallet failed: $e');
     }
   }
 
@@ -178,14 +176,41 @@ class TransactionService {
     DateTime? endDate,
   }) async {
     try {
-      final response = await _supabase.rpc('get_transaction_stats', params: {
-        'user_id_param': userId,
-        'merchant_id_param': merchantId,
-        'start_date': startDate?.toIso8601String(),
-        'end_date': endDate?.toIso8601String(),
-      });
+      var query = _supabase.from('transactions').select();
 
-      return response;
+      if (userId != null) {
+        query = query.eq('user_id', userId);
+      }
+      if (merchantId != null) {
+        query = query.eq('tenant_id', merchantId);
+      }
+      if (startDate != null) {
+        query = query.gte('created_at', startDate.toIso8601String());
+      }
+      if (endDate != null) {
+        query = query.lte('created_at', endDate.toIso8601String());
+      }
+
+      final response = await query;
+
+      double totalAmount = 0;
+      double totalCashback = 0;
+      int totalPoints = 0;
+      int totalTransactions = response.length;
+
+      for (final transaction in response) {
+  totalAmount += (transaction['jumlah'] ?? 0.0).toDouble();
+  totalCashback += (transaction['jumlah_cashback'] ?? 0.0).toDouble();
+  totalPoints += ((transaction['poin_diperoleh'] ?? 0) as num).toInt();
+}
+
+
+      return {
+        'total_transactions': totalTransactions,
+        'total_amount': totalAmount,
+        'total_cashback': totalCashback,
+        'total_points': totalPoints,
+      };
     } catch (e) {
       throw Exception('Get transaction stats failed: $e');
     }

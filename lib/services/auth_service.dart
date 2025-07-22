@@ -76,7 +76,7 @@ class AuthService {
       final response = await _supabase
           .from('users')
           .select()
-          .eq('id', userId)
+          .eq('user_id', userId)
           .single();
 
       return UserModel.fromJson(response);
@@ -92,16 +92,17 @@ class AuthService {
     String? profileImageUrl,
   }) async {
     try {
-      final updateData = <String, dynamic>{};
+      final updateData = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
       
-      if (fullName != null) updateData['full_name'] = fullName;
-      if (phoneNumber != null) updateData['phone_number'] = phoneNumber;
-      if (profileImageUrl != null) updateData['profile_image_url'] = profileImageUrl;
+      if (fullName != null) updateData['nama'] = fullName;
+      if (phoneNumber != null) updateData['telepon'] = phoneNumber;
 
       final response = await _supabase
           .from('users')
           .update(updateData)
-          .eq('id', userId)
+          .eq('user_id', userId)
           .select()
           .single();
 
@@ -122,19 +123,15 @@ class AuthService {
       final userReferralCode = _generateReferralCode();
       
       await _supabase.from('users').insert({
-        'id': userId,
+        'user_id': userId,
         'email': email,
-        'full_name': fullName,
-        'phone_number': phoneNumber,
-        'role': 'user',
-        'points_balance': 0,
-        'wallet_balance': 0.0,
-        'check_in_streak': 0,
-        'referral_code': userReferralCode,
-        'referred_by': referralCode,
-        'is_email_verified': false,
-        'is_phone_verified': false,
+        'nama': fullName,
+        'telepon': phoneNumber,
+        'kode_referral': userReferralCode,
+        'saldo_poin': 0,
+        'saldo_dompet': 0.0,
         'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
       });
 
       // Process referral if provided
@@ -151,36 +148,51 @@ class AuthService {
       // Find referrer
       final referrerResponse = await _supabase
           .from('users')
-          .select('id')
-          .eq('referral_code', referralCode)
+          .select('user_id')
+          .eq('kode_referral', referralCode)
           .maybeSingle();
 
       if (referrerResponse != null) {
-        final referrerId = referrerResponse['id'];
+        final referrerId = referrerResponse['user_id'];
 
         // Create referral record
-        await _supabase.from('referrals').insert({
-          'id': _uuid.v4(),
+        await _supabase.from('referral').insert({
+          'referral_id': _uuid.v4(),
           'referrer_id': referrerId,
           'referee_id': newUserId,
-          'status': 'pending',
+          'poin_bonus': 100,
           'created_at': DateTime.now().toIso8601String(),
         });
 
         // Give bonus points to both users
-        await _supabase.rpc('update_user_points', params: {
-          'user_id': referrerId,
-          'points_to_add': 100,
-        });
-
-        await _supabase.rpc('update_user_points', params: {
-          'user_id': newUserId,
-          'points_to_add': 100,
-        });
+        await _updateUserPoints(referrerId, 100);
+        await _updateUserPoints(newUserId, 100);
       }
     } catch (e) {
       // Don't throw here as it's not critical for signup
       print('Referral processing error: $e');
+    }
+  }
+
+  Future<void> _updateUserPoints(String userId, int points) async {
+    try {
+      final user = await _supabase
+          .from('users')
+          .select('saldo_poin')
+          .eq('user_id', userId)
+          .single();
+
+      final currentPoints = user['saldo_poin'] ?? 0;
+      
+      await _supabase
+          .from('users')
+          .update({
+            'saldo_poin': currentPoints + points,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId);
+    } catch (e) {
+      throw Exception('Update user points failed: $e');
     }
   }
 
