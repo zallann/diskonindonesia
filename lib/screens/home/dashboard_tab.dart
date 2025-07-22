@@ -51,7 +51,7 @@ class DashboardTab extends StatelessWidget {
                                         : null,
                                     child: user.profileImageUrl == null
                                         ? Text(
-                                            user.fullName?.substring(0, 1).toUpperCase() ?? 'U',
+                                            user.nama?.substring(0, 1).toUpperCase() ?? 'U',
                                             style: const TextStyle(
                                               color: AppTheme.primaryRed,
                                               fontWeight: FontWeight.bold,
@@ -74,7 +74,7 @@ class DashboardTab extends StatelessWidget {
                                               ),
                                         ),
                                         Text(
-                                          user.fullName ?? 'Pengguna',
+                                          user.nama ?? 'Pengguna',
                                           style: Theme.of(context)
                                               .textTheme
                                               .titleLarge
@@ -119,7 +119,7 @@ class DashboardTab extends StatelessWidget {
                               child: _buildBalanceCard(
                                 context,
                                 'Poin',
-                                NumberFormat('#,###').format(user.pointsBalance),
+                                NumberFormat('#,###').format(user.saldoPoin),
                                 Icons.stars,
                                 AppTheme.accentGold,
                               ),
@@ -129,7 +129,7 @@ class DashboardTab extends StatelessWidget {
                               child: _buildBalanceCard(
                                 context,
                                 'Saldo',
-                                'Rp ${NumberFormat('#,###').format(user.walletBalance)}',
+                                'Rp ${NumberFormat('#,###').format(user.saldoDompet)}',
                                 Icons.account_balance_wallet,
                                 AppTheme.successGreen,
                               ),
@@ -239,7 +239,7 @@ class DashboardTab extends StatelessWidget {
                     final authProvider = context.read<AuthProvider>();
                     final user = authProvider.currentUser!;
                     
-                    final canCheckIn = gamificationProvider.canCheckIn(user.lastCheckIn);
+                    final canCheckIn = true; // Always allow check-in for now since we don't track it in DB
                     
                     return _buildGamificationButton(
                       context,
@@ -274,7 +274,7 @@ class DashboardTab extends StatelessWidget {
                     final authProvider = context.read<AuthProvider>();
                     final user = authProvider.currentUser!;
                     
-                    final canSpin = gamificationProvider.canSpinWheel(user.lastSpinWheel);
+                    final canSpin = true; // Always allow spin for now since we don't track it in DB
                     
                     return _buildGamificationButton(
                       context,
